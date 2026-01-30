@@ -143,7 +143,7 @@ Please answer based on the documents and previous conversation context. If you d
         personality = st.session_state.get("bot_personality", bot_personality) or "You are a helpful, professional, and accurate assistant."
         
         # Get relevant document chunks
-        docs = retriever.invoke(question)
+        docs = retriever_obj.invoke(question)
         context = format_docs(docs)
         
         # Format chat history
@@ -323,7 +323,6 @@ def main():
             try:
                 with st.spinner("Thinking..."):
                     # Get answer from RAG chain with conversation context
-                # answer = qa_chain.invoke(prompt)
                     answer = qa_chain(prompt)
                     
                     # Get source documents
