@@ -323,7 +323,8 @@ def main():
             try:
                 with st.spinner("Thinking..."):
                     # Get answer from RAG chain with conversation context
-                    answer = qa_chain.invoke(prompt)
+                # answer = qa_chain.invoke(prompt)
+                    answer = qa_chain(prompt)
                     
                     # Get source documents
                     sources = retriever.invoke(prompt)
