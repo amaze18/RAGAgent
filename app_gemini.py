@@ -122,7 +122,7 @@ Please answer based on the documents and previous conversation context. If you d
         input_variables=["context", "question", "chat_history", "personality"]
     )
     
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    retriever_obj = vectorstore.as_retriever(search_kwargs={"k": 3})
     
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
