@@ -100,20 +100,26 @@ def create_vector_store(documents: List, embeddings) -> FAISS:
     return vectorstore
 
 
-def create_rag_chain(vectorstore, llm):
-    """Create RAG chain with custom prompt"""
-    prompt_template = """Use the following pieces of context to answer the question at the end. 
-If you don't know the answer, just say that you don't know, don't try to make up an answer.
+def create_rag_chain(vectorstore, llm, bot_personality=""):
+    """Create RAG chain with custom prompt that includes conversation history and bot personality"""
+    prompt_template = """You are a helpful assistant with the following personality traits:
+{personality}
 
-Context: {context}
+Your role is to answer questions based on provided documents and previous conversations.
 
-Question: {question}
+Previous Conversation (for context):
+{chat_history}
 
-Answer:"""
+Document Context:
+{context}
+
+Current Question: {question}
+
+Please answer based on the documents and previous conversation context. If you don't know the answer, say so."""
     
     prompt = PromptTemplate(
         template=prompt_template,
-        input_variables=["context", "question"]
+        input_variables=["context", "question", "chat_history", "personality"]
     )
     
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -121,15 +127,41 @@ Answer:"""
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
     
-    qa_chain = (
-        {"question": RunnablePassthrough()}
-        | RunnablePassthrough.assign(context=lambda x: format_docs(retriever.invoke(x["question"])))
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
+    def format_chat_history(messages, limit=10):
+        """Format last N conversation pairs as context"""
+        # Filter only user and assistant messages, limit to last 10 pairs
+        qa_pairs = []
+        for msg in messages[-limit*2:]:
+            role = "User" if msg["role"] == "user" else "Assistant"
+            qa_pairs.append(f"{role}: {msg['content'][:200]}")  # Limit each to 200 chars
+        return "\n".join(qa_pairs) if qa_pairs else "No previous conversation"
     
-    return qa_chain, retriever
+    def invoke_chain(input_dict):
+        """Custom invoke that includes chat history and personality"""
+        question = input_dict if isinstance(input_dict, str) else input_dict.get("question", "")
+        messages = st.session_state.get("messages", [])
+        personality = st.session_state.get("bot_personality", bot_personality) or "You are a helpful, professional, and accurate assistant."
+        
+        # Get relevant document chunks
+        docs = retriever.invoke(question)
+        context = format_docs(docs)
+        
+        # Format chat history
+        chat_history = format_chat_history(messages, limit=10)
+        
+        # Format prompt with all context
+        formatted_prompt = prompt.format(
+            context=context,
+            question=question,
+            chat_history=chat_history,
+            personality=personality
+        )
+        
+        # Get response from LLM
+        response = llm.invoke(formatted_prompt)
+        return response.content if hasattr(response, 'content') else str(response)
+    
+    return invoke_chain, retriever
 
 
 @st.cache_resource
@@ -220,6 +252,20 @@ def main():
         
         st.divider()
         st.header("Settings")
+        
+        # Bot Personality Settings
+        st.subheader("🤖 Bot Personality")
+        bot_personality = st.text_area(
+            "Customize bot personality and behavior:",
+            value=st.session_state.get("bot_personality", "You are a helpful, professional, and accurate assistant."),
+            height=100,
+            placeholder="E.g., You are a friendly, knowledgeable expert who explains concepts simply...",
+            key="personality_input"
+        )
+        
+        if bot_personality:
+            st.session_state.bot_personality = bot_personality
+        
         st.info(
             "This RAG Agent uses Google's Gemini 2.5 Flash model to answer questions "
             "based on documents you upload. Supports PDF and TXT files."
@@ -276,10 +322,8 @@ def main():
             
             try:
                 with st.spinner("Thinking..."):
-                    # Get answer from RAG chain
-                    #answer = qa_chain.invoke({"question": prompt})
-                    answer = qa_chain.invoke(prompt)
-
+                    # Get answer from RAG chain with conversation context
+                    answer = qa_chain(prompt)
                     
                     # Get source documents
                     sources = retriever.invoke(prompt)
