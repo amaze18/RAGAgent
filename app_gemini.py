@@ -136,9 +136,9 @@ Answer:"""
 def initialize_models():
     """Initialize Google Generative AI models (cached)"""
     try:
-        # Initialize embeddings
+        # Initialize embeddings using the latest model
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/text-embedding-004",
             google_api_key=GOOGLE_API_KEY
         )
         
