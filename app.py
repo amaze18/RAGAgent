@@ -1,15 +1,18 @@
 """
 Streamlit Web App for RAG Agent using AWS Bedrock Qwen model
-Reads documents from doc/ folder and answers user queries through a web interface
+Allows users to upload documents and answers queries through a web interface
 """
 
 import os
 from pathlib import Path
 from typing import List
+import tempfile
+import io
 
 import boto3
 import streamlit as st
-from langchain_community.document_loaders import DirectoryLoader, TextLoader, PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.schema import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_aws import BedrockEmbeddings, BedrockLLM
@@ -41,35 +44,45 @@ if BEDROCK_API_KEY:
     os.environ["AWS_BEARER_TOKEN_BEDROCK"] = BEDROCK_API_KEY
 
 
-def load_documents(doc_folder: str = "doc") -> List:
-    """Load all documents from the doc folder"""
-    doc_path = Path(doc_folder)
-    
-    if not doc_path.exists():
-        doc_path.mkdir()
-        return []
-    
+def load_documents_from_files(uploaded_files) -> List[Document]:
+    """Load documents from uploaded files"""
     documents = []
     
-    # Load PDF files
-    pdf_files = list(doc_path.glob("*.pdf"))
-    if pdf_files:
-        pdf_loader = DirectoryLoader(
-            str(doc_path),
-            glob="*.pdf",
-            loader_cls=PyPDFLoader
-        )
-        documents.extend(pdf_loader.load())
-    
-    # Load text files
-    txt_files = list(doc_path.glob("*.txt"))
-    if txt_files:
-        txt_loader = DirectoryLoader(
-            str(doc_path),
-            glob="*.txt",
-            loader_cls=TextLoader
-        )
-        documents.extend(txt_loader.load())
+    for uploaded_file in uploaded_files:
+        try:
+            if uploaded_file.type == "application/pdf":
+                # Handle PDF files
+                pdf_bytes = uploaded_file.read()
+                pdf_file = io.BytesIO(pdf_bytes)
+                
+                # Save to temporary file for PyPDFLoader
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                    tmp_file.write(pdf_bytes)
+                    tmp_path = tmp_file.name
+                
+                try:
+                    pdf_loader = PyPDFLoader(tmp_path)
+                    docs = pdf_loader.load()
+                    
+                    # Add source information
+                    for doc in docs:
+                        doc.metadata["source"] = uploaded_file.name
+                    
+                    documents.extend(docs)
+                finally:
+                    os.remove(tmp_path)
+            
+            elif uploaded_file.type == "text/plain":
+                # Handle text files
+                text_content = uploaded_file.read().decode("utf-8")
+                doc = Document(
+                    page_content=text_content,
+                    metadata={"source": uploaded_file.name}
+                )
+                documents.append(doc)
+        
+        except Exception as e:
+            st.error(f"Error loading {uploaded_file.name}: {str(e)}")
     
     return documents
 
@@ -158,10 +171,14 @@ def initialize_models():
 def load_and_process_documents():
     """Load documents and create vector store (cached)"""
     try:
-        documents = load_documents()
+        # Check if documents are in session state
+        if "uploaded_files" not in st.session_state or not st.session_state.uploaded_files:
+            return None, None, 0
+        
+        documents = load_documents_from_files(st.session_state.uploaded_files)
         
         if not documents:
-            st.warning("No documents found in doc/ folder. Please add PDF or TXT files.")
+            st.warning("No valid documents found in uploads.")
             return None, None, 0
         
         embeddings, llm, _ = initialize_models()
@@ -182,30 +199,47 @@ def load_and_process_documents():
 def main():
     """Main Streamlit app"""
     st.title("📚 RAG Agent with AWS Bedrock")
-    st.markdown("**Ask questions about your documents**")
+    st.markdown("**Upload documents and ask questions about them**")
     
     # Sidebar configuration
     with st.sidebar:
-        st.header("Configuration")
-        st.markdown("### Settings")
+        st.header("📁 Document Upload")
+        
+        # File uploader
+        uploaded_files = st.file_uploader(
+            "Upload your documents (PDF or TXT)",
+            type=["pdf", "txt"],
+            accept_multiple_files=True,
+            key="file_uploader"
+        )
+        
+        # Store uploaded files in session state
+        if uploaded_files:
+            st.session_state.uploaded_files = uploaded_files
+            st.success(f"✅ {len(uploaded_files)} file(s) uploaded")
         
         if st.button("🔄 Reload Documents", key="reload_docs"):
             st.cache_resource.clear()
+            st.session_state.messages = []
             st.rerun()
         
-        doc_folder = st.text_input("Document Folder", value="doc", key="doc_folder")
-        
-        st.markdown("### About")
+        st.divider()
+        st.header("Settings")
         st.info(
             "This RAG Agent uses AWS Bedrock's Qwen model to answer questions "
-            "based on documents in your doc/ folder. Supports PDF and TXT files."
+            "based on documents you upload. Supports PDF and TXT files."
         )
+    
+    # Check if documents are uploaded
+    if "uploaded_files" not in st.session_state or not st.session_state.uploaded_files:
+        st.warning("📤 Please upload documents to get started. Use the file uploader in the sidebar.")
+        return
     
     # Load models and documents
     qa_chain, retriever, doc_count = load_and_process_documents()
     
     if qa_chain is None or retriever is None:
-        st.error("Failed to initialize the RAG agent. Please check the logs above.")
+        st.error("Failed to process documents. Please check the logs above.")
         return
     
     # Display status
@@ -262,7 +296,7 @@ def main():
                         st.markdown(f"**Source {i}:**")
                         st.text(doc.page_content[:500] + "..." if len(doc.page_content) > 500 else doc.page_content)
                         if doc.metadata:
-                            st.caption(f"Metadata: {doc.metadata}")
+                            st.caption(f"Source: {doc.metadata.get('source', 'Unknown')}")
                 
                 # Add assistant message to history
                 st.session_state.messages.append({"role": "assistant", "content": answer})
