@@ -240,14 +240,26 @@ def main():
             key="file_uploader"
         )
         
-        # Store uploaded files in session state
+        # Store uploaded files in session state (update only if new files are uploaded)
         if uploaded_files:
             st.session_state.uploaded_files = uploaded_files
             st.success(f"✅ {len(uploaded_files)} file(s) uploaded")
+        elif "uploaded_files" in st.session_state and st.session_state.uploaded_files:
+            # Show status of previously uploaded files even after reload
+            st.info(f"📄 {len(st.session_state.uploaded_files)} file(s) currently loaded")
         
         if st.button("🔄 Reload Documents", key="reload_docs"):
+            # Clear cache to force reprocessing of documents
             st.cache_resource.clear()
+            # Clear chat history
             st.session_state.messages = []
+            # Keep uploaded_files in session state - don't clear them
+            st.rerun()
+        
+        if st.button("🗑️ Clear All", key="clear_all"):
+            # Clear everything including uploaded files
+            st.cache_resource.clear()
+            st.session_state.clear()
             st.rerun()
         
         st.divider()
