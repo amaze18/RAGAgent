@@ -161,7 +161,7 @@ Please answer based on the documents and previous conversation context. If you d
         response = llm.invoke(formatted_prompt)
         return response.content if hasattr(response, 'content') else str(response)
     
-    return invoke_chain, retriever
+    return invoke_chain, retriever_obj
 
 
 @st.cache_resource
