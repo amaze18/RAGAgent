@@ -3,8 +3,8 @@ langchain==0.1.20
 langchain-core==0.1.53
 langchain-community==0.0.38
 langchain-google-genai==1.0.10
-google-generativeai==0.4.1
 faiss-cpu==1.7.4
 pypdf==4.2.0
 python-dotenv==1.0.1
+
 
