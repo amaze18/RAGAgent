@@ -1,10 +1,11 @@
 streamlit==1.31.1
+
 langchain==0.1.20
 langchain-core==0.1.53
 langchain-community==0.0.38
-langchain-google-genai==1.0.10
+
+langchain-google-genai==0.0.11
+
 faiss-cpu==1.7.4
 pypdf==4.2.0
 python-dotenv==1.0.1
-
-
