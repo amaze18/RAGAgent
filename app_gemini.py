@@ -10,12 +10,14 @@ import tempfile
 import io
 
 import streamlit as st
-import google.generativeai as genai
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_google_genai import (
+    GoogleGenerativeAIEmbeddings,
+    ChatGoogleGenerativeAI
+)
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -35,13 +37,6 @@ st.set_page_config(
 # Google Generative AI Configuration
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 MODEL_ID = "gemini-2.5-flash"
-
-# Set API key
-if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
-else:
-    st.error("GOOGLE_API_KEY not found in environment variables")
-    st.stop()
 
 
 def load_documents_from_files(uploaded_files) -> List[Document]:
