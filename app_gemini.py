@@ -277,7 +277,9 @@ def main():
             try:
                 with st.spinner("Thinking..."):
                     # Get answer from RAG chain
-                    answer = qa_chain.invoke({"question": prompt})
+                    #answer = qa_chain.invoke({"question": prompt})
+                    answer = qa_chain.invoke(prompt)
+
                     
                     # Get source documents
                     sources = retriever.invoke(prompt)
