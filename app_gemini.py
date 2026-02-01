@@ -2,7 +2,6 @@
 Streamlit Web App for RAG Agent using Google Gemini 2.5 Flash model
 Allows users to upload documents and answer queries through a web interface
 """
-
 import os
 from pathlib import Path
 from typing import List
